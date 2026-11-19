@@ -1,0 +1,103 @@
+name: Update README TODO list
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message != 'docs: update TODO list from dev'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+      - name: Update README
+        shell: bash
+        run: |
+          git checkout -B dev origin/dev
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          readme = Path("README.md")
+          text = readme.read_text(encoding="utf-8")
+          title = "### 📝 Complete TODO List"
+          start = text.index(title)
+          body_start = start + len(title)
+          next_heading = text.index("## 🤝 Contributing", body_start)
+          prefix = text[:body_start]
+          suffix = text[next_heading:]
+
+          item_re = re.compile(r"^- \[ \] \*\*(.+?):(\d+)\*\* - (.*)$")
+          items = []
+          for line in text[body_start:next_heading].splitlines():
+              m = item_re.match(line)
+              if m:
+                  items.append((m.group(1), int(m.group(2)), m.group(3)))
+
+          removed = {
+              ("luffy/deepscaler/utils.py", "Implement OpenAI API client initialization"),
+              ("luffy/deepscaler/utils.py", "Add proper authentication handling"),
+              ("luffy/deepscaler/utils.py", "Implement exponential backoff retry logic for rate limits"),
+              ("luffy/deepscaler/utils.py", "Add comprehensive error handling for different API errors"),
+              ("luffy/deepscaler/utils.py", "Implement response parsing and validation"),
+              ("luffy/verl/verl/protocol.py", "Implement batch dimension folding for efficient processing"),
+              ("luffy/verl/verl/protocol.py", "Add validation for batch size compatibility"),
+              ("luffy/verl/verl/protocol.py", "Handle edge cases where batch_size is not divisible by new_batch_size"),
+              ("luffy/verl/verl/protocol.py", "Implement batch dimension unfolding functionality"),
+              ("luffy/verl/verl/protocol.py", "Add support for variable batch dimensions"),
+              ("luffy/verl/verl/protocol.py", "Handle non-tensor batch data reshaping properly"),
+          }
+
+          line_updates = {
+              ("luffy/deepscaler/utils.py", "Add logging for API calls and errors"): 45,
+              ("luffy/deepscaler/utils.py", "Support batch processing for multiple prompts"): 46,
+              ("luffy/deepscaler/utils.py", "Add timeout configuration for API calls"): 47,
+              ("luffy/deepscaler/utils.py", "Implement Vertex AI initialization and authentication"): 107,
+              ("luffy/deepscaler/utils.py", "Configure safety settings for content generation"): 108,
+              ("luffy/deepscaler/utils.py", "Set up GenerativeModel with proper system instructions"): 109,
+              ("luffy/deepscaler/utils.py", "Implement retry logic with exponential backoff"): 110,
+              ("luffy/deepscaler/utils.py", "Add comprehensive error handling for API access issues"): 111,
+              ("luffy/deepscaler/utils.py", "Handle rate limiting and quota management"): 112,
+              ("luffy/deepscaler/utils.py", "Implement response validation and text extraction"): 113,
+              ("luffy/deepscaler/utils.py", "Add support for different generation configurations"): 114,
+              ("luffy/verl/verl/protocol.py", "Optimize memory usage during tensor reshaping"): 114,
+              ("luffy/verl/verl/protocol.py", "Add support for different tensor types and shapes"): 115,
+              ("luffy/verl/verl/protocol.py", "Optimize tensor view operations for performance"): 136,
+              ("luffy/verl/verl/protocol.py", "Add error handling for invalid batch dimensions"): 137,
+              ("luffy/verl/verl/protocol.py", "(zhangchi.usc1992) add consistency check"): 169,
+              ("luffy/verl/verl/protocol.py", "we can actually lift this restriction if needed"): 265,
+              ("luffy/verl/verl/protocol.py", "(zhangchi.usc1992) whether to copy"): 351,
+          }
+
+          additions = []
+
+          updated = []
+          for path, line, desc in items:
+              key = (path, desc)
+              if key in removed:
+                  continue
+              if key in line_updates:
+                  line = line_updates[key]
+              updated.append((path, line, desc))
+          updated.extend(additions)
+          updated.sort(key=lambda x: (x[0], x[1]))
+          lines = [f"- [ ] **{p}:{ln}** - {d}" for p, ln, d in updated]
+          new_text = prefix + "\n\n" + "\n".join(lines) + "\n\n" + suffix
+          readme.write_text(new_text, encoding="utf-8")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          if git diff --cached --quiet; then
+            echo "README already up to date"
+          else
+            git commit -m "docs: update TODO list from dev"
+            git push origin HEAD:dev
+          fi
